@@ -1,9 +1,7 @@
-FROM debian:12-slim
+FROM python:3.11-slim
 
-RUN apt-get update \
-    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-       c-icap squidclamav ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+COPY icap_server.py /app/icap_server.py
 
 EXPOSE 1344
-CMD ["c-icap", "-N", "-f", "/etc/c-icap/c-icap.conf"]
+CMD ["python", "/app/icap_server.py"]

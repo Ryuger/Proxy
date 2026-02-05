@@ -68,36 +68,7 @@ cache deny all
 '@
 Set-Content -Path (Join-Path $SquidDir 'squid.conf') -Value $squidConfig -Encoding UTF8
 
-$ciCapConfig = @'
-PidFile /var/run/c-icap/c-icap.pid
-CommandsSocket /var/run/c-icap/c-icap.ctl
-Timeout 300
-MaxServers 30
-StartServers 5
-MinSpareThreads 10
-MaxSpareThreads 20
-ThreadsPerChild 20
-Port 1344
-User c-icap
-Group c-icap
-ServerAdmin admin@localhost
-ServerName c-icap-server
-
-Service squidclamav squidclamav.so
-ServiceAlias avscan squidclamav
-Module common
-
-Include /etc/c-icap/squidclamav.conf
-'@
-Set-Content -Path (Join-Path $CIcapDir 'c-icap.conf') -Value $ciCapConfig -Encoding UTF8
-
-$squidClam = @'
-clamd_ip clamd
-clamd_port 3310
-maxsize 100M
-stream_max_length 100M
-'@
-Set-Content -Path (Join-Path $CIcapDir 'squidclamav.conf') -Value $squidClam -Encoding UTF8
+$note = 'Using embedded Python ICAP server container.'
 
 $compose = @'
 services:
@@ -118,13 +89,8 @@ services:
     build:
       context: ../cicap
     container_name: corp-c-icap
-    depends_on:
-      - clamd
     ports:
       - "1344:1344"
-    volumes:
-      - ./c-icap/c-icap.conf:/etc/c-icap/c-icap.conf:ro
-      - ./c-icap/squidclamav.conf:/etc/c-icap/squidclamav.conf:ro
 
   clamd:
     image: clamav/clamav:latest

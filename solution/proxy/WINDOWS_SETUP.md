@@ -20,9 +20,10 @@
 
 Или двойным кликом по `StartProxyServer.bat`.
 
-## Что исправлено относительно прошлой версии
-- Генерация CA больше не вызывает `sh` внутри `alpine/openssl`.
-- ICAP-сервис больше не тянется из несуществующего `moul/icap`, теперь используется локальный Docker build `solution/proxy/cicap/Dockerfile`.
+## Почему раньше падало и что исправлено
+- `docker` показывал help из-за неверной передачи аргументов в PowerShell-функцию — исправлено (`Invoke-DockerChecked -Args @(...)`).
+- Пакеты `c-icap-modules`/`squidclamav` отсутствуют в части базовых образов Debian, из-за чего ломался build.
+- Теперь ICAP поднимается через локальный Python ICAP service (`solution/proxy/cicap/icap_server.py`) и больше не зависит от нестабильных пакетных имен в apt.
 - Инициализация SSL DB для Squid выполняется с авто-поиском `security_file_certgen`/`cert_tool`.
 - Если запуск compose падает — скрипт завершится с ошибкой, а не сообщит ложный успех.
 
@@ -35,3 +36,4 @@
 - Замените demo CA на корпоративный PKI Root CA.
 - Выдайте Root CA на Android устройства через MDM как trusted cert.
 - Примените Brave managed policy (см. `../client/MOBILE_CLIENT_SETUP.md`).
+- Минимальный ICAP сервис можно расширить: добавить фактическую проверку через `clamd` и блокировку зараженных объектов по хэшу/статусу.
