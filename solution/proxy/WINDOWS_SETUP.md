@@ -20,12 +20,22 @@
 
 Или двойным кликом по `StartProxyServer.bat`.
 
-## Почему раньше падало и что исправлено
-- `docker` показывал help из-за неверной передачи аргументов в PowerShell-функцию — исправлено (`Invoke-DockerChecked -Args @(...)`).
-- Пакеты `c-icap-modules`/`squidclamav` отсутствуют в части базовых образов Debian, из-за чего ломался build.
-- Теперь ICAP поднимается через локальный Python ICAP service (`solution/proxy/cicap/icap_server.py`) и больше не зависит от нестабильных пакетных имен в apt.
-- Инициализация SSL DB для Squid выполняется с авто-поиском `security_file_certgen`/`cert_tool`.
-- Если запуск compose падает — скрипт завершится с ошибкой, а не сообщит ложный успех.
+## Почему у вас было "Up", а потом `curl` не работает
+- Раньше скрипт не валидировал, что **все** сервисы реально остались running после старта.
+- Если `portal` или `squid` падали через секунду, вы видели только частичный список контейнеров.
+- Также путь volume для `quarantine_server.py` был неверным относительно `runtime/docker-compose.yml`.
+
+Теперь исправлено:
+- корректный путь монтирования: `../../storage/quarantine_server.py`;
+- строгая проверка всех сервисов (`squid`, `c-icap`, `clamd`, `portal`), при падении выводятся логи и скрипт завершается с ошибкой.
+
+## Важно по `docker compose ps`
+Если вы запускаете команду из `solution\proxy`, нужно так:
+```powershell
+docker compose -f runtime/docker-compose.yml ps
+```
+
+Или перейти в `solution\proxy\runtime` и выполнить обычный `docker compose ps`.
 
 ## Порты
 - `3128` — proxy (Squid)

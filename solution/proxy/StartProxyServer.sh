@@ -77,7 +77,7 @@ services:
     ports:
       - "8080:8080"
     volumes:
-      - ../storage/quarantine_server.py:/app/quarantine_server.py:ro
+      - ../../storage/quarantine_server.py:/app/quarantine_server.py:ro
       - ./portal:/data
 COMPOSE
 
@@ -89,11 +89,24 @@ echo "[3/7] Starting services with docker compose."
 (cd "$RUNTIME_DIR" && docker compose up -d --build)
 
 echo "[4/7] Verifying services."
-(cd "$RUNTIME_DIR" && docker compose ps)
+(
+  cd "$RUNTIME_DIR"
+  docker compose ps
+  required=(squid c-icap clamd portal)
+  running="$(docker compose ps --services --status running)"
+  for svc in "${required[@]}"; do
+    if ! grep -qx "$svc" <<< "$running"; then
+      echo "Service '$svc' is not running. Recent logs:" >&2
+      docker compose logs --tail=120 "$svc" >&2 || true
+      exit 1
+    fi
+  done
+)
 
 echo "[5/7] Proxy endpoint: http://<server-ip>:3128"
 echo "[6/7] ICAP endpoint: icap://<server-ip>:1344/squidclamav"
 echo "[7/7] Portal/API: http://localhost:8080"
+echo "Tip: run `docker compose -f runtime/docker-compose.yml ps` from solution/proxy."
 echo
 
 echo "IMPORTANT: Install runtime/squid/certs/proxy-root-ca.crt into managed Android trust store via MDM."
