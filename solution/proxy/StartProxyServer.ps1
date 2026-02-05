@@ -4,10 +4,20 @@ Param(
 
 $ErrorActionPreference = 'Stop'
 
-# Free/open-source stack:
-# - Squid (GPLv2)
-# - c-icap (LGPL)
-# - ClamAV (GPLv2)
+function Require-Command([string]$name) {
+    if (-not (Get-Command $name -ErrorAction SilentlyContinue)) {
+        throw "Required command not found: $name"
+    }
+}
+
+function Invoke-DockerChecked([string[]]$Args) {
+    & docker @Args
+    if ($LASTEXITCODE -ne 0) {
+        throw "Docker command failed: docker $($Args -join ' ')"
+    }
+}
+
+Require-Command docker
 
 $RootDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $RuntimeDir = Join-Path $RootDir 'runtime'
@@ -24,14 +34,11 @@ $CaKeyPath = Join-Path $CertsDir 'proxy-root-ca.key'
 $CaCrtPath = Join-Path $CertsDir 'proxy-root-ca.crt'
 
 if (-not $SkipCertGeneration -and -not (Test-Path $CaKeyPath)) {
-    Write-Host '[1/6] Generating local Root CA for TLS inspection (demo) via OpenSSL container...'
-
-    docker run --rm -v "${CertsDir}:/certs" alpine/openssl:latest sh -lc "\
-      openssl genrsa -out /certs/proxy-root-ca.key 4096 && \
-      openssl req -new -x509 -days 3650 \
-        -key /certs/proxy-root-ca.key \
-        -out /certs/proxy-root-ca.crt \
-        -subj '/C=RU/O=Company Proxy/CN=Company Proxy Root CA'"
+    Write-Host '[1/7] Generating local Root CA for TLS inspection (demo)...'
+    Invoke-DockerChecked @('run', '--rm', '-v', "${CertsDir}:/certs", 'alpine/openssl:latest', 'genrsa', '-out', '/certs/proxy-root-ca.key', '4096')
+    Invoke-DockerChecked @('run', '--rm', '-v', "${CertsDir}:/certs", 'alpine/openssl:latest', 'req', '-new', '-x509', '-days', '3650', '-key', '/certs/proxy-root-ca.key', '-out', '/certs/proxy-root-ca.crt', '-subj', '/C=RU/O=Company Proxy/CN=Company Proxy Root CA')
+} elseif (-not (Test-Path $CaCrtPath)) {
+    throw "CA certificate not found at $CaCrtPath. Run without -SkipCertGeneration or place certificate files manually."
 }
 
 $squidConfig = @'
@@ -108,7 +115,8 @@ services:
       - ./squid/log:/var/log/squid
 
   c-icap:
-    image: moul/icap:latest
+    build:
+      context: ../cicap
     container_name: corp-c-icap
     depends_on:
       - clamd
@@ -137,21 +145,34 @@ services:
 '@
 Set-Content -Path (Join-Path $RuntimeDir 'docker-compose.yml') -Value $compose -Encoding UTF8
 
-Write-Host '[2/6] Initializing squid SSL DB...'
-docker run --rm -v "${CertsDir}:/certs" ubuntu/squid:latest /usr/lib/squid/security_file_certgen -c -s /certs/ssl_db -M 32MB | Out-Null
+Write-Host '[2/7] Initializing squid SSL DB...'
+$initCmd = "if [ -x /usr/lib/squid/security_file_certgen ]; then /usr/lib/squid/security_file_certgen -c -s /certs/ssl_db -M 32MB; elif [ -x /usr/lib/squid/cert_tool ]; then /usr/lib/squid/cert_tool -c -s /certs/ssl_db -M 32MB; else echo 'ERROR: no squid cert tool found' >&2; exit 1; fi"
+Invoke-DockerChecked @('run', '--rm', '-v', "${CertsDir}:/certs", 'ubuntu/squid:latest', 'sh', '-lc', $initCmd)
 
-Write-Host '[3/6] Starting services with docker compose...'
+Write-Host '[3/7] Starting services with docker compose...'
 Push-Location $RuntimeDir
 try {
-    docker compose up -d
+    & docker compose up -d --build
+    if ($LASTEXITCODE -ne 0) {
+        throw 'docker compose up failed'
+    }
 }
 finally {
     Pop-Location
 }
 
-Write-Host '[4/6] Proxy started on :3128'
-Write-Host '[5/6] ICAP AV service on :1344'
-Write-Host '[6/6] Portal/API on http://localhost:8080'
+Write-Host '[4/7] Verifying running containers...'
+Push-Location $RuntimeDir
+try {
+    & docker compose ps
+}
+finally {
+    Pop-Location
+}
+
+Write-Host '[5/7] Proxy endpoint: http://<server-ip>:3128'
+Write-Host '[6/7] ICAP endpoint: icap://<server-ip>:1344/squidclamav'
+Write-Host '[7/7] Portal/API: http://localhost:8080'
 Write-Host ''
 Write-Host 'IMPORTANT: Install runtime/squid/certs/proxy-root-ca.crt into managed Android trust store via MDM.'
 Write-Host 'IMPORTANT: Block QUIC and enforce proxy/VPN from MDM policy.'
