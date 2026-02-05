@@ -35,8 +35,8 @@ $CaCrtPath = Join-Path $CertsDir 'proxy-root-ca.crt'
 
 if (-not $SkipCertGeneration -and -not (Test-Path $CaKeyPath)) {
     Write-Host '[1/7] Generating local Root CA for TLS inspection (demo)...'
-    Invoke-DockerChecked @('run', '--rm', '-v', "${CertsDir}:/certs", 'alpine/openssl:latest', 'genrsa', '-out', '/certs/proxy-root-ca.key', '4096')
-    Invoke-DockerChecked @('run', '--rm', '-v', "${CertsDir}:/certs", 'alpine/openssl:latest', 'req', '-new', '-x509', '-days', '3650', '-key', '/certs/proxy-root-ca.key', '-out', '/certs/proxy-root-ca.crt', '-subj', '/C=RU/O=Company Proxy/CN=Company Proxy Root CA')
+    Invoke-DockerChecked -Args @('run', '--rm', '-v', "${CertsDir}:/certs", 'alpine/openssl:latest', 'genrsa', '-out', '/certs/proxy-root-ca.key', '4096')
+    Invoke-DockerChecked -Args @('run', '--rm', '-v', "${CertsDir}:/certs", 'alpine/openssl:latest', 'req', '-new', '-x509', '-days', '3650', '-key', '/certs/proxy-root-ca.key', '-out', '/certs/proxy-root-ca.crt', '-subj', '/C=RU/O=Company Proxy/CN=Company Proxy Root CA')
 } elseif (-not (Test-Path $CaCrtPath)) {
     throw "CA certificate not found at $CaCrtPath. Run without -SkipCertGeneration or place certificate files manually."
 }
@@ -147,7 +147,7 @@ Set-Content -Path (Join-Path $RuntimeDir 'docker-compose.yml') -Value $compose -
 
 Write-Host '[2/7] Initializing squid SSL DB...'
 $initCmd = "if [ -x /usr/lib/squid/security_file_certgen ]; then /usr/lib/squid/security_file_certgen -c -s /certs/ssl_db -M 32MB; elif [ -x /usr/lib/squid/cert_tool ]; then /usr/lib/squid/cert_tool -c -s /certs/ssl_db -M 32MB; else echo 'ERROR: no squid cert tool found' >&2; exit 1; fi"
-Invoke-DockerChecked @('run', '--rm', '-v', "${CertsDir}:/certs", 'ubuntu/squid:latest', 'sh', '-lc', $initCmd)
+Invoke-DockerChecked -Args @('run', '--rm', '-v', "${CertsDir}:/certs", 'ubuntu/squid:latest', 'sh', '-lc', $initCmd)
 
 Write-Host '[3/7] Starting services with docker compose...'
 Push-Location $RuntimeDir
